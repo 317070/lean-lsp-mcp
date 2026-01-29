@@ -252,7 +252,6 @@ async def lsp_build(
     lean_project_path: Annotated[
         Optional[str], Field(description="Path to Lean project")
     ] = None,
-    clean: Annotated[bool, Field(description="Run lake clean first (slow)")] = False,
     output_lines: Annotated[
         int, Field(description="Return last N lines of build log (0=none)")
     ] = 20,
@@ -277,15 +276,6 @@ async def lsp_build(
         if client:
             ctx.request_context.lifespan_context.client = None
             client.close()
-
-        if clean:
-            await ctx.report_progress(
-                progress=1, total=16, message="Running `lake clean`"
-            )
-            clean_proc = await asyncio.create_subprocess_exec(
-                "lake", "clean", cwd=lean_project_path_obj
-            )
-            await clean_proc.wait()
 
         await ctx.report_progress(
             progress=2, total=16, message="Running `lake exe cache get`"
