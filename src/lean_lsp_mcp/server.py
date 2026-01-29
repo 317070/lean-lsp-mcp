@@ -259,7 +259,11 @@ async def lsp_build(
         int, Field(description="Number of lines from the end of the build log to return (default 20)")
     ] = 20,
 ) -> BuildResult:
-    """Build the Lean project and restart LSP. Use only if needed (e.g. new imports)."""
+    """Build the Lean project using Lake and restart the LSP client.
+
+    Use this when project-wide changes occur, such as adding new dependencies
+    or modifying the configuration file.
+    """
     if not lean_project_path:
         lean_project_path_obj = ctx.request_context.lifespan_context.lean_project_path
     else:
@@ -373,7 +377,11 @@ def file_contents(
         bool, Field(description="If True, adds line numbers to the output")
     ] = True,
 ) -> str:
-    """DEPRECATED. Get file contents with optional line numbers."""
+    """DEPRECATED. Retrieve the full text content of a Lean source file.
+
+    Optionally includes line number annotations. Prefer reading files directly
+    if possible.
+    """
     # Infer project path but do not start a client
     if file_path.endswith(".lean"):
         infer_project_path(ctx, file_path)  # Silently fails for non-project files
@@ -414,7 +422,11 @@ def file_outline(
         ),
     ],
 ) -> FileOutline:
-    """Get imports and declarations with type signatures. Token-efficient."""
+    """Extract a structural summary of a Lean file.
+
+    Includes imports and top-level declarations with their type signatures.
+    Efficient for large files as it avoids reading the entire content.
+    """
     rel_path = setup_client_for_file(ctx, file_path)
     if not rel_path:
         raise LeanToolError(
@@ -520,7 +532,10 @@ def diagnostic_messages(
         Field(description="Name of declaration to filter by (case-sensitive). If provided, overrides line filtering."),
     ] = None,
 ) -> DiagnosticsResult:
-    """Get compiler diagnostics (errors, warnings, infos) for a Lean file."""
+    """Retrieve compiler diagnostics (errors, warnings, info) for a file.
+
+    Results can be filtered by line range or by a specific declaration name.
+    """
     rel_path = setup_client_for_file(ctx, file_path)
     if not rel_path:
         raise LeanToolError(
@@ -577,10 +592,10 @@ def goal(
         ),
     ] = None,
 ) -> GoalState:
-    """Get proof goals at a position. MOST IMPORTANT tool - use often!
+    """Display the proof state (hypotheses and goals) at a specific position.
 
-    Omit column to see goals_before (line start) and goals_after (line end),
-    showing how the tactic transforms the state. "no goals" = proof complete.
+    This is the primary tool for interactive theorem proving. Providing only
+    a line number reveals how the tactics on that line transform the proof state.
     """
     rel_path = setup_client_for_file(ctx, file_path)
     if not rel_path:
@@ -642,7 +657,11 @@ def term_goal(
         Field(description="Column number (1-based). Defaults to end of line", ge=1),
     ] = None,
 ) -> TermGoalState:
-    """Get the expected type at a position."""
+    """Retrieve the expected type of an expression at a specific position.
+
+    Useful for identifying what kind of term is required to complete a definition
+    or fill a hole (underscore).
+    """
     rel_path = setup_client_for_file(ctx, file_path)
     if not rel_path:
         raise LeanToolError(
@@ -694,7 +713,11 @@ def hover(
         int, Field(description="Column number (1-based) at the START of identifier", ge=1)
     ],
 ) -> HoverInfo:
-    """Get type signature and docs for a symbol. Essential for understanding APIs."""
+    """Retrieve information about the symbol at a specific position.
+
+    Includes type signature and documentation. Crucial for understanding the
+    API of libraries.
+    """
     rel_path = setup_client_for_file(ctx, file_path)
     if not rel_path:
         raise LeanToolError(
@@ -750,7 +773,10 @@ def completions(
         int, Field(description="Maximum number of completions to return (default 32)", ge=1)
     ] = 32,
 ) -> CompletionsResult:
-    """Get IDE autocompletions. Use on INCOMPLETE code (after `.` or partial name)."""
+    """Retrieve suggested completions for a partial identifier or dot access.
+
+    Provides options available in the current context of the IDE.
+    """
     rel_path = setup_client_for_file(ctx, file_path)
     if not rel_path:
         raise LeanToolError(
@@ -831,7 +857,11 @@ def declaration_file(
         Field(description="Symbol name (case-sensitive) which must exist in the file"),
     ],
 ) -> DeclarationInfo:
-    """Get file where a symbol is declared. Symbol must be present in file first."""
+    """Locate the source file and line where a symbol is defined.
+
+    The symbol must be present or used within the provided file for the LSP
+    to find its definition.
+    """
     rel_path = setup_client_for_file(ctx, file_path)
     if not rel_path:
         raise LeanToolError(
@@ -896,7 +926,11 @@ def multi_attempt(
         ),
     ],
 ) -> MultiAttemptResult:
-    """Try multiple tactics without modifying file. Returns goal state for each."""
+    """Execute multiple independent tactic snippets at a position.
+
+    Does not permanently modify the file. Returns the resulting proof state
+    for each attempt, allowing for quick experimentation.
+    """
     rel_path = setup_client_for_file(ctx, file_path)
     if not rel_path:
         raise LeanToolError(
@@ -962,7 +996,11 @@ def run_code(
         ),
     ],
 ) -> RunResult:
-    """Run a code snippet and return diagnostics. Must include all imports."""
+    """Execute a self-contained Lean code snippet in a temporary file.
+
+    Returns any compiler messages produced. The snippet must be a complete
+    file including all necessary imports.
+    """
     lifespan_context = ctx.request_context.lifespan_context
     lean_project_path = lifespan_context.lean_project_path
     if lean_project_path is None:
@@ -1045,7 +1083,11 @@ async def local_search(
         ),
     ] = None,
 ) -> LocalSearchResults:
-    """Fast local search to verify declarations exist. Use BEFORE trying a lemma name."""
+    """Perform a fast search for declarations within the local project.
+
+    Use this to verify the existence of a lemma or definition before
+    attempting to use it in a proof.
+    """
     if not _RG_AVAILABLE:
         raise LocalSearchError(_RG_MESSAGE)
 
@@ -1104,10 +1146,9 @@ async def leansearch(
     ],
     num_results: Annotated[int, Field(description="Max results to return (default 5)", ge=1)] = 5,
 ) -> LeanSearchResults:
-    """Search Mathlib via leansearch.net using natural language.
+    """Search Mathlib for declarations using natural language or Lean terms.
 
-    Examples: "sum of two even numbers is even", "Cauchy-Schwarz inequality",
-    "{f : A → B} (hf : Injective f) : ∃ g, LeftInverse g f"
+    Uses the leansearch.net service.
     """
     headers = {"User-Agent": "lean-lsp-mcp/0.1", "Content-Type": "application/json"}
     payload = orjson.dumps({"num_results": str(num_results), "query": [query]})
@@ -1159,10 +1200,9 @@ async def loogle(
     ],
     num_results: Annotated[int, Field(description="Max results to return (default 8)", ge=1)] = 8,
 ) -> LoogleResults:
-    """Search Mathlib by type signature via loogle.lean-lang.org.
+    """Search Mathlib for declarations matching a type signature pattern.
 
-    Examples: `Real.sin`, `"comm"`, `(?a → ?b) → List ?a → List ?b`,
-    `_ * (_ ^ _)`, `|- _ < _ → _ + 1 < _ + 1`
+    Uses the loogle service.
     """
     app_ctx: AppContext = ctx.request_context.lifespan_context
 
@@ -1231,10 +1271,9 @@ async def leanfinder(
     ],
     num_results: Annotated[int, Field(description="Max results to return (default 5)", ge=1)] = 5,
 ) -> LeanFinderResults:
-    """Semantic search by mathematical meaning via Lean Finder.
+    """Semantic search based on mathematical meaning or proof state text.
 
-    Examples: "commutativity of addition on natural numbers",
-    "I have h : n < m and need n + 1 < m + 1", proof state text.
+    Uses the Lean Finder service.
     """
     headers = {"User-Agent": "lean-lsp-mcp/0.1", "Content-Type": "application/json"}
     request_url = "https://bxrituxuhpc70w8w.us-east-1.aws.endpoints.huggingface.cloud"
@@ -1291,7 +1330,10 @@ async def state_search(
     column: Annotated[int, Field(description="Column number (1-based)", ge=1)],
     num_results: Annotated[int, Field(description="Max results to return (default 5)", ge=1)] = 5,
 ) -> StateSearchResults:
-    """Find lemmas to close the goal at a position. Searches premise-search.com."""
+    """Search for lemmas that might help close the current proof goal.
+
+    Uses premise-search.com service.
+    """
     rel_path = setup_client_for_file(ctx, file_path)
     if not rel_path:
         raise LeanToolError(
@@ -1347,9 +1389,9 @@ async def hammer_premise(
     column: Annotated[int, Field(description="Column number (1-based)", ge=1)],
     num_results: Annotated[int, Field(description="Max results to return (default 32)", ge=1)] = 32,
 ) -> PremiseResults:
-    """Get premise suggestions for automation tactics at a goal position.
+    """Retrieve suggested premises for automated proof tactics (e.g., simp, aesop).
 
-    Returns lemma names to try with `simp only [...]`, `aesop`, or as hints.
+    Returns a list of lemma names that may be useful at the current goal position.
     """
     rel_path = setup_client_for_file(ctx, file_path)
     if not rel_path:
@@ -1419,7 +1461,10 @@ async def profile_proof(
         float, Field(description="Max seconds to wait for profiling (default 60.0)", ge=1)
     ] = 60.0,
 ) -> ProofProfileResult:
-    """Run `lean --profile` on a theorem. Returns per-line timing and categories."""
+    """Profile a theorem to identify slow lines.
+
+    Runs `lean --profile` and returns per-line timing and categories.
+    """
     from lean_lsp_mcp.profile_utils import profile_theorem
 
     # Get project path
