@@ -250,10 +250,13 @@ def rate_limited(category: str, max_requests: int, per_seconds: int):
 async def lsp_build(
     ctx: Context,
     lean_project_path: Annotated[
-        Optional[str], Field(description="Path to Lean project")
+        Optional[str],
+        Field(
+            description="Absolute path to the Lean project root (e.g., /stackslib/lean)"
+        ),
     ] = None,
     output_lines: Annotated[
-        int, Field(description="Return last N lines of build log (0=none)")
+        int, Field(description="Number of lines from the end of the build log to return (default 20)")
     ] = 20,
 ) -> BuildResult:
     """Build the Lean project and restart LSP. Use only if needed (e.g. new imports)."""
@@ -360,8 +363,15 @@ async def lsp_build(
 @deprecated
 def file_contents(
     ctx: Context,
-    file_path: Annotated[str, Field(description="Absolute path to Lean file")],
-    annotate_lines: Annotated[bool, Field(description="Add line numbers")] = True,
+    file_path: Annotated[
+        str,
+        Field(
+            description="Absolute path to the Lean file (e.g., /stackslib/lean/Stackslib/Algebra/CohenStructureTheorem.lean)"
+        ),
+    ],
+    annotate_lines: Annotated[
+        bool, Field(description="If True, adds line numbers to the output")
+    ] = True,
 ) -> str:
     """DEPRECATED. Get file contents with optional line numbers."""
     # Infer project path but do not start a client
@@ -397,7 +407,12 @@ def file_contents(
 )
 def file_outline(
     ctx: Context,
-    file_path: Annotated[str, Field(description="Absolute path to Lean file")],
+    file_path: Annotated[
+        str,
+        Field(
+            description="Absolute path to the Lean file (e.g., /stackslib/lean/Stackslib/Algebra/CohenStructureTheorem.lean)"
+        ),
+    ],
 ) -> FileOutline:
     """Get imports and declarations with type signatures. Token-efficient."""
     rel_path = setup_client_for_file(ctx, file_path)
@@ -488,15 +503,21 @@ def _process_diagnostics(
 )
 def diagnostic_messages(
     ctx: Context,
-    file_path: Annotated[str, Field(description="Absolute path to Lean file")],
+    file_path: Annotated[
+        str,
+        Field(
+            description="Absolute path to the Lean file (e.g., /stackslib/lean/Stackslib/Algebra/CohenStructureTheorem.lean)"
+        ),
+    ],
     start_line: Annotated[
-        Optional[int], Field(description="Filter from line", ge=1)
+        Optional[int], Field(description="Start line for filtering (1-based)", ge=1)
     ] = None,
     end_line: Annotated[
-        Optional[int], Field(description="Filter to line", ge=1)
+        Optional[int], Field(description="End line for filtering (1-based)", ge=1)
     ] = None,
     declaration_name: Annotated[
-        Optional[str], Field(description="Filter to declaration (slow)")
+        Optional[str],
+        Field(description="Name of declaration to filter by (case-sensitive). If provided, overrides line filtering."),
     ] = None,
 ) -> DiagnosticsResult:
     """Get compiler diagnostics (errors, warnings, infos) for a Lean file."""
@@ -541,11 +562,19 @@ def diagnostic_messages(
 )
 def goal(
     ctx: Context,
-    file_path: Annotated[str, Field(description="Absolute path to Lean file")],
-    line: Annotated[int, Field(description="Line number (1-indexed)", ge=1)],
+    file_path: Annotated[
+        str,
+        Field(
+            description="Absolute path to the Lean file (e.g., /stackslib/lean/Stackslib/Algebra/CohenStructureTheorem.lean)"
+        ),
+    ],
+    line: Annotated[int, Field(description="Line number (1-based)", ge=1)],
     column: Annotated[
         Optional[int],
-        Field(description="Column (1-indexed). Omit for before/after", ge=1),
+        Field(
+            description="Column number (1-based). If omitted, returns goals before and after the line",
+            ge=1,
+        ),
     ] = None,
 ) -> GoalState:
     """Get proof goals at a position. MOST IMPORTANT tool - use often!
@@ -601,10 +630,16 @@ def goal(
 )
 def term_goal(
     ctx: Context,
-    file_path: Annotated[str, Field(description="Absolute path to Lean file")],
-    line: Annotated[int, Field(description="Line number (1-indexed)", ge=1)],
+    file_path: Annotated[
+        str,
+        Field(
+            description="Absolute path to the Lean file (e.g., /stackslib/lean/Stackslib/Algebra/CohenStructureTheorem.lean)"
+        ),
+    ],
+    line: Annotated[int, Field(description="Line number (1-based)", ge=1)],
     column: Annotated[
-        Optional[int], Field(description="Column (defaults to end of line)", ge=1)
+        Optional[int],
+        Field(description="Column number (1-based). Defaults to end of line", ge=1),
     ] = None,
 ) -> TermGoalState:
     """Get the expected type at a position."""
@@ -648,9 +683,16 @@ def term_goal(
 )
 def hover(
     ctx: Context,
-    file_path: Annotated[str, Field(description="Absolute path to Lean file")],
-    line: Annotated[int, Field(description="Line number (1-indexed)", ge=1)],
-    column: Annotated[int, Field(description="Column at START of identifier", ge=1)],
+    file_path: Annotated[
+        str,
+        Field(
+            description="Absolute path to the Lean file (e.g., /stackslib/lean/Stackslib/Algebra/CohenStructureTheorem.lean)"
+        ),
+    ],
+    line: Annotated[int, Field(description="Line number (1-based)", ge=1)],
+    column: Annotated[
+        int, Field(description="Column number (1-based) at the START of identifier", ge=1)
+    ],
 ) -> HoverInfo:
     """Get type signature and docs for a symbol. Essential for understanding APIs."""
     rel_path = setup_client_for_file(ctx, file_path)
@@ -696,10 +738,17 @@ def hover(
 )
 def completions(
     ctx: Context,
-    file_path: Annotated[str, Field(description="Absolute path to Lean file")],
-    line: Annotated[int, Field(description="Line number (1-indexed)", ge=1)],
-    column: Annotated[int, Field(description="Column number (1-indexed)", ge=1)],
-    max_completions: Annotated[int, Field(description="Max completions", ge=1)] = 32,
+    file_path: Annotated[
+        str,
+        Field(
+            description="Absolute path to the Lean file (e.g., /stackslib/lean/Stackslib/Algebra/CohenStructureTheorem.lean)"
+        ),
+    ],
+    line: Annotated[int, Field(description="Line number (1-based)", ge=1)],
+    column: Annotated[int, Field(description="Column number (1-based)", ge=1)],
+    max_completions: Annotated[
+        int, Field(description="Maximum number of completions to return (default 32)", ge=1)
+    ] = 32,
 ) -> CompletionsResult:
     """Get IDE autocompletions. Use on INCOMPLETE code (after `.` or partial name)."""
     rel_path = setup_client_for_file(ctx, file_path)
@@ -771,9 +820,15 @@ def completions(
 )
 def declaration_file(
     ctx: Context,
-    file_path: Annotated[str, Field(description="Absolute path to Lean file")],
+    file_path: Annotated[
+        str,
+        Field(
+            description="Absolute path to the Lean file (e.g., /stackslib/lean/Stackslib/Algebra/CohenStructureTheorem.lean)"
+        ),
+    ],
     symbol: Annotated[
-        str, Field(description="Symbol (case sensitive, must be in file)")
+        str,
+        Field(description="Symbol name (case-sensitive) which must exist in the file"),
     ],
 ) -> DeclarationInfo:
     """Get file where a symbol is declared. Symbol must be present in file first."""
@@ -827,10 +882,18 @@ def declaration_file(
 )
 def multi_attempt(
     ctx: Context,
-    file_path: Annotated[str, Field(description="Absolute path to Lean file")],
-    line: Annotated[int, Field(description="Line number (1-indexed)", ge=1)],
+    file_path: Annotated[
+        str,
+        Field(
+            description="Absolute path to the Lean file (e.g., /stackslib/lean/Stackslib/Algebra/CohenStructureTheorem.lean)"
+        ),
+    ],
+    line: Annotated[int, Field(description="Line number (1-based)", ge=1)],
     snippets: Annotated[
-        List[str], Field(description="Tactics to try (3+ recommended)")
+        List[str],
+        Field(
+            description="List of tactics to try (e.g., ['simp', 'ring']). 3+ recommended"
+        ),
     ],
 ) -> MultiAttemptResult:
     """Try multiple tactics without modifying file. Returns goal state for each."""
@@ -892,7 +955,12 @@ def multi_attempt(
 )
 def run_code(
     ctx: Context,
-    code: Annotated[str, Field(description="Self-contained Lean code with imports")],
+    code: Annotated[
+        str,
+        Field(
+            description="Self-contained Lean code with imports. Must be a complete file."
+        ),
+    ],
 ) -> RunResult:
     """Run a code snippet and return diagnostics. Must include all imports."""
     lifespan_context = ctx.request_context.lifespan_context
@@ -964,10 +1032,17 @@ class LocalSearchError(Exception):
 )
 async def local_search(
     ctx: Context,
-    query: Annotated[str, Field(description="Declaration name or prefix")],
-    limit: Annotated[int, Field(description="Max matches", ge=1)] = 10,
+    query: Annotated[
+        str, Field(description="Declaration name or substring (e.g., 'AddCommMonoid')")
+    ],
+    limit: Annotated[
+        int, Field(description="Maximum number of matches to return (default 10)", ge=1)
+    ] = 10,
     project_root: Annotated[
-        Optional[str], Field(description="Project root (inferred if omitted)")
+        Optional[str],
+        Field(
+            description="Absolute path to the project root (inferred if omitted, e.g., /stackslib/lean)"
+        ),
     ] = None,
 ) -> LocalSearchResults:
     """Fast local search to verify declarations exist. Use BEFORE trying a lemma name."""
@@ -1021,8 +1096,13 @@ async def local_search(
 @rate_limited("leansearch", max_requests=3, per_seconds=30)
 async def leansearch(
     ctx: Context,
-    query: Annotated[str, Field(description="Natural language or Lean term query")],
-    num_results: Annotated[int, Field(description="Max results", ge=1)] = 5,
+    query: Annotated[
+        str,
+        Field(
+            description="Natural language query or Lean term (e.g., 'sum of even numbers')"
+        ),
+    ],
+    num_results: Annotated[int, Field(description="Max results to return (default 5)", ge=1)] = 5,
 ) -> LeanSearchResults:
     """Search Mathlib via leansearch.net using natural language.
 
@@ -1072,9 +1152,12 @@ async def leansearch(
 async def loogle(
     ctx: Context,
     query: Annotated[
-        str, Field(description="Type pattern, constant, or name substring")
+        str,
+        Field(
+            description="Type pattern (e.g., 'Real.sin', '(?a -> ?b) -> List ?a -> List ?b')"
+        ),
     ],
-    num_results: Annotated[int, Field(description="Max results", ge=1)] = 8,
+    num_results: Annotated[int, Field(description="Max results to return (default 8)", ge=1)] = 8,
 ) -> LoogleResults:
     """Search Mathlib by type signature via loogle.lean-lang.org.
 
@@ -1140,8 +1223,13 @@ async def loogle(
 @rate_limited("leanfinder", max_requests=10, per_seconds=30)
 async def leanfinder(
     ctx: Context,
-    query: Annotated[str, Field(description="Mathematical concept or proof state")],
-    num_results: Annotated[int, Field(description="Max results", ge=1)] = 5,
+    query: Annotated[
+        str,
+        Field(
+            description="Mathematical concept (e.g. 'commutativity') or proof state text"
+        ),
+    ],
+    num_results: Annotated[int, Field(description="Max results to return (default 5)", ge=1)] = 5,
 ) -> LeanFinderResults:
     """Semantic search by mathematical meaning via Lean Finder.
 
@@ -1193,10 +1281,15 @@ async def leanfinder(
 @rate_limited("lean_state_search", max_requests=3, per_seconds=30)
 async def state_search(
     ctx: Context,
-    file_path: Annotated[str, Field(description="Absolute path to Lean file")],
-    line: Annotated[int, Field(description="Line number (1-indexed)", ge=1)],
-    column: Annotated[int, Field(description="Column number (1-indexed)", ge=1)],
-    num_results: Annotated[int, Field(description="Max results", ge=1)] = 5,
+    file_path: Annotated[
+        str,
+        Field(
+            description="Absolute path to the Lean file (e.g., /stackslib/lean/Stackslib/Algebra/CohenStructureTheorem.lean)"
+        ),
+    ],
+    line: Annotated[int, Field(description="Line number (1-based)", ge=1)],
+    column: Annotated[int, Field(description="Column number (1-based)", ge=1)],
+    num_results: Annotated[int, Field(description="Max results to return (default 5)", ge=1)] = 5,
 ) -> StateSearchResults:
     """Find lemmas to close the goal at a position. Searches premise-search.com."""
     rel_path = setup_client_for_file(ctx, file_path)
@@ -1244,10 +1337,15 @@ async def state_search(
 @rate_limited("hammer_premise", max_requests=3, per_seconds=30)
 async def hammer_premise(
     ctx: Context,
-    file_path: Annotated[str, Field(description="Absolute path to Lean file")],
-    line: Annotated[int, Field(description="Line number (1-indexed)", ge=1)],
-    column: Annotated[int, Field(description="Column number (1-indexed)", ge=1)],
-    num_results: Annotated[int, Field(description="Max results", ge=1)] = 32,
+    file_path: Annotated[
+        str,
+        Field(
+            description="Absolute path to the Lean file (e.g., /stackslib/lean/Stackslib/Algebra/CohenStructureTheorem.lean)"
+        ),
+    ],
+    line: Annotated[int, Field(description="Line number (1-based)", ge=1)],
+    column: Annotated[int, Field(description="Column number (1-based)", ge=1)],
+    num_results: Annotated[int, Field(description="Max results to return (default 32)", ge=1)] = 32,
 ) -> PremiseResults:
     """Get premise suggestions for automation tactics at a goal position.
 
@@ -1305,14 +1403,21 @@ async def hammer_premise(
 )
 async def profile_proof(
     ctx: Context,
-    file_path: Annotated[str, Field(description="Absolute path to Lean file")],
+    file_path: Annotated[
+        str,
+        Field(
+            description="Absolute path to the Lean file (e.g., /stackslib/lean/Stackslib/Algebra/CohenStructureTheorem.lean)"
+        ),
+    ],
     line: Annotated[
-        int, Field(description="Line where theorem starts (1-indexed)", ge=1)
+        int, Field(description="Line number where theorem starts (1-based)", ge=1)
     ],
     top_n: Annotated[
-        int, Field(description="Number of slowest lines to return", ge=1)
+        int, Field(description="Number of slowest lines to return (default 5)", ge=1)
     ] = 5,
-    timeout: Annotated[float, Field(description="Max seconds to wait", ge=1)] = 60.0,
+    timeout: Annotated[
+        float, Field(description="Max seconds to wait for profiling (default 60.0)", ge=1)
+    ] = 60.0,
 ) -> ProofProfileResult:
     """Run `lean --profile` on a theorem. Returns per-line timing and categories."""
     from lean_lsp_mcp.profile_utils import profile_theorem
